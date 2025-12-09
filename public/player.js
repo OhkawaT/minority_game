@@ -159,10 +159,20 @@ function render(state) {
   els.votesCount.textContent = `${state.votesSubmitted} 件`;
   els.question.textContent = state.question || '準備中';
 
-  const you = state.you || { active: false, choice: null };
+  const you = state.you || { active: false, choice: null, winner: null };
   if (you.active) {
-    els.activeStatus.textContent = '参加中';
-    els.activeStatus.className = 'status ok';
+    if (state.phase === 'final') {
+      if (you.winner) {
+        els.activeStatus.textContent = 'Winner';
+        els.activeStatus.className = 'status ok';
+      } else {
+        els.activeStatus.textContent = 'Loser';
+        els.activeStatus.className = 'status warn';
+      }
+    } else {
+      els.activeStatus.textContent = '参加中';
+      els.activeStatus.className = 'status ok';
+    }
   } else {
     els.activeStatus.textContent = state.totalPlayers === 0 ? '待機中' : '脱落';
     els.activeStatus.className = 'status warn';
@@ -172,7 +182,11 @@ function render(state) {
     const label = idx === 0 ? state.options?.[0] : state.options?.[1];
     const choice = idx === 0 ? 'A' : 'B';
     const caption = btn.querySelector('.muted');
-    btn.querySelector('strong').textContent = `${choice} / ${label || choice}`;
+    let strongText = `${label || choice}`;
+    if (state.phase === 'result' && state.counts) {
+      strongText += ` (${state.counts[choice]}票)`;
+    }
+    btn.querySelector('strong').textContent = strongText;
     if (caption) {
       caption.textContent = label || '選択肢';
     }
@@ -197,13 +211,26 @@ function render(state) {
   els.summaryTotal.textContent = `${state.totalPlayers} 名`;
   els.summaryActive.textContent = `${state.activePlayers} 名`;
 
-  if (state.phase === 'result' && state.counts) {
+  els.summaryA.classList.remove('highlight-minority', 'highlight-majority');
+  els.summaryB.classList.remove('highlight-minority', 'highlight-majority');
+  els.summaryMinority.className = '';
+
+  const showCounts = (state.phase === 'result' || state.phase === 'final') && state.counts;
+  if (showCounts) {
     els.summaryA.textContent = `${state.counts.A} 票`;
     els.summaryB.textContent = `${state.counts.B} 票`;
     if (state.minority) {
       els.summaryMinority.textContent = `${state.minority} が少数派`;
+      if (state.minority === 'A') {
+        els.summaryA.classList.add('highlight-minority');
+        els.summaryB.classList.add('highlight-majority');
+      } else if (state.minority === 'B') {
+        els.summaryB.classList.add('highlight-minority');
+        els.summaryA.classList.add('highlight-majority');
+      }
     } else {
       els.summaryMinority.textContent = '同数のため全員残留';
+      els.summaryMinority.className = 'highlight-majority';
     }
   } else {
     els.summaryA.textContent = '-';

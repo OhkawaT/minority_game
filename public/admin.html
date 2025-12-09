@@ -56,6 +56,7 @@
           <button id="queue-start-btn" class="secondary">次の問題へ（キュー先頭）</button>
           <button id="start-btn">入力内容で即開始</button>
           <button id="reveal-btn" class="secondary">結果表示</button>
+          <button id="final-btn" class="secondary">最終結果表示（勝者決定）</button>
           <button id="reset-btn" class="ghost">全リセット</button>
         </div>
         <p class="footer">進行目安: 1) 必要数のプリセットを追加 → 2) 「次の問題へ」で開始 → 3) 回答 → 4) 「結果表示」 → 5) 再度「次の問題へ」</p>
@@ -107,6 +108,14 @@
           <span class="status" id="player-note">接続確認中...</span>
         </div>
         <div id="players" class="players"></div>
+      </div>
+
+      <div class="card">
+        <div class="inline" style="justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 10px;">
+          <h2>勝者一覧（最終結果表示後）</h2>
+          <span class="status" id="winners-note">未確定</span>
+        </div>
+        <div id="winners" class="players"></div>
       </div>
 
       <div id="toast" class="toast" style="display: none;"></div>

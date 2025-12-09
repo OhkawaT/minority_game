@@ -22,6 +22,7 @@ const els = {
   optionB: document.getElementById('option-b'),
   startBtn: document.getElementById('start-btn'),
   revealBtn: document.getElementById('reveal-btn'),
+  finalBtn: document.getElementById('final-btn'),
   resetBtn: document.getElementById('reset-btn'),
   queueAddBtn: document.getElementById('queue-add-btn'),
   queueStartBtn: document.getElementById('queue-start-btn'),
@@ -36,6 +37,8 @@ const els = {
   questionPreview: document.getElementById('question-preview'),
   players: document.getElementById('players'),
   playerNote: document.getElementById('player-note'),
+  winners: document.getElementById('winners'),
+  winnersNote: document.getElementById('winners-note'),
   logout: document.getElementById('logout-admin'),
   toast: document.getElementById('toast'),
 };
@@ -110,11 +113,14 @@ function sendAdmin(type, payload = {}) {
 function render(state) {
   const admin = state.admin || {};
   const queue = admin.queue || [];
+  const winners = admin.finalWinners || [];
   const phaseLabel =
     state.phase === 'voting'
       ? '回答受付中'
       : state.phase === 'result'
       ? '結果表示'
+      : state.phase === 'final'
+      ? '最終結果'
       : '待機中';
 
   els.phase.textContent = phaseLabel;
@@ -126,31 +132,52 @@ function render(state) {
 
   els.summaryTotal.textContent = `${state.totalPlayers} 名`;
   els.summaryActive.textContent = `${state.activePlayers} 名`;
+
+  // 投票数とマイノリティ強調
+  els.summaryA.classList.remove('highlight-minority', 'highlight-majority');
+  els.summaryB.classList.remove('highlight-minority', 'highlight-majority');
   if (admin.counts) {
     els.summaryA.textContent = `${admin.counts.A} 票`;
     els.summaryB.textContent = `${admin.counts.B} 票`;
+    if (state.phase === 'result' || state.phase === 'final') {
+      if (state.minority === 'A') {
+        els.summaryA.classList.add('highlight-minority');
+        els.summaryB.classList.add('highlight-majority');
+      } else if (state.minority === 'B') {
+        els.summaryB.classList.add('highlight-minority');
+        els.summaryA.classList.add('highlight-majority');
+      }
+    }
   } else {
     els.summaryA.textContent = '-';
     els.summaryB.textContent = '-';
   }
 
-  if (state.phase === 'result') {
-    els.summaryMinority.textContent = state.minority ? `${state.minority} が少数派` : '同数のため全員残留';
+  if (state.phase === 'result' || state.phase === 'final') {
+    if (state.minority) {
+      els.summaryMinority.textContent = `${state.minority} が少数派`;
+      els.summaryMinority.className = 'highlight-minority';
+    } else {
+      els.summaryMinority.textContent = '同数（投票者のみ残留）';
+      els.summaryMinority.className = 'highlight-majority';
+    }
   } else {
     els.summaryMinority.textContent = '未公開';
+    els.summaryMinority.className = '';
   }
 
   els.questionPreview.textContent = `問題: ${state.question || '---'}`;
 
-  renderQueue(queue, state.phase);
-
-  if (admin.players) {
-    renderPlayers(admin.players, state);
-  }
+  renderQueue(queue);
+  if (admin.players) renderPlayers(admin.players, state);
+  renderWinners(winners, state.phase);
 
   els.startBtn.disabled = state.phase === 'voting';
   els.revealBtn.disabled = state.votesSubmitted === 0;
   els.queueStartBtn.disabled = queue.length === 0 || state.phase === 'voting';
+  if (els.finalBtn) {
+    els.finalBtn.disabled = state.phase === 'final';
+  }
 }
 
 function renderQueue(queue) {
@@ -188,9 +215,9 @@ function renderPlayers(list, state) {
       <div class="meta">投票: ${vote}</div>
       <div class="meta">接続: ${connected}</div>
     `;
-    if (state.phase === 'result' && state.minority && p.choice === state.minority) {
+    if ((state.phase === 'result' || state.phase === 'final') && state.minority && p.choice === state.minority) {
       div.style.borderColor = 'rgba(34, 197, 94, 0.4)';
-    } else if (state.phase === 'result' && state.minority && p.choice && p.choice !== state.minority) {
+    } else if ((state.phase === 'result' || state.phase === 'final') && state.minority && p.choice && p.choice !== state.minority) {
       div.style.opacity = 0.6;
     }
     fragments.appendChild(div);
@@ -200,7 +227,32 @@ function renderPlayers(list, state) {
   els.playerNote.textContent = `アクティブ接続: ${activeConnected} / ${list.length}`;
 }
 
-// イベント
+function renderWinners(list, phase) {
+  if (!els.winners || !els.winnersNote) return;
+  els.winners.innerHTML = '';
+  if (phase !== 'final') {
+    els.winnersNote.textContent = '未確定';
+    return;
+  }
+  if (!list.length) {
+    els.winnersNote.textContent = '勝者なし';
+    return;
+  }
+  const fragments = document.createDocumentFragment();
+  list.forEach((w) => {
+    const div = document.createElement('div');
+    div.className = 'player';
+    div.innerHTML = `
+      <div class="name">${w.name}</div>
+      <div class="meta">ID: ${w.id}</div>
+    `;
+    fragments.appendChild(div);
+  });
+  els.winners.appendChild(fragments);
+  els.winnersNote.textContent = `勝者: ${list.length} 名`;
+}
+
+// 進行操作
 els.startBtn.addEventListener('click', () => {
   sendAdmin('admin:start', {
     question: els.questionInput.value,
@@ -232,6 +284,13 @@ els.revealBtn.addEventListener('click', () => {
   showToast('結果を表示しました');
 });
 
+if (els.finalBtn) {
+  els.finalBtn.addEventListener('click', () => {
+    sendAdmin('admin:final');
+    showToast('最終結果を表示します');
+  });
+}
+
 els.resetBtn.addEventListener('click', () => {
   const ok = confirm('全ての状態をリセットしますか？プリセットも消去されます。');
   if (!ok) return;
@@ -246,14 +305,7 @@ els.queueList.addEventListener('click', (e) => {
   }
 });
 
-if (els.logout) {
-  els.logout.addEventListener('click', () => {
-    localStorage.removeItem(storageKeys.adminPass);
-    showToast('ログアウトしました');
-    window.location.replace('/login.html');
-  });
-}
-
+// パスワード変更
 async function changePasswords() {
   const adminPass = localStorage.getItem(storageKeys.adminPass) || '';
   if (!adminPass) {
@@ -270,11 +322,7 @@ async function changePasswords() {
     const res = await fetch('/api/password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        adminPass,
-        newAdminPass,
-        newPlayerPass,
-      }),
+      body: JSON.stringify({ adminPass, newAdminPass, newPlayerPass }),
     });
     if (!res.ok) {
       showToast('パスワード変更に失敗しました', 'warn');
@@ -286,17 +334,21 @@ async function changePasswords() {
     els.newAdminPass.value = '';
     els.newPlayerPass.value = '';
     showToast('パスワードを更新しました');
-    if (newAdminPass) {
-      connect(); // 新パスで再接続
-    }
+    if (newAdminPass) connect();
   } catch {
     showToast('通信エラーが発生しました', 'warn');
   }
 }
 
 const changePassBtn = document.getElementById('change-pass-btn');
-if (changePassBtn) {
-  changePassBtn.addEventListener('click', changePasswords);
+if (changePassBtn) changePassBtn.addEventListener('click', changePasswords);
+
+if (els.logout) {
+  els.logout.addEventListener('click', () => {
+    localStorage.removeItem(storageKeys.adminPass);
+    showToast('ログアウトしました');
+    window.location.replace('/login.html');
+  });
 }
 
 if (ensureLoggedIn()) {

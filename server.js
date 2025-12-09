@@ -7,23 +7,19 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 let ADMIN_PASS = process.env.ADMIN_PASS || 'admin252';
 let PLAYER_PASS = process.env.PLAYER_PASS || 'player';
-const app = express();
 
+const app = express();
 app.use(express.json());
 
-// ログイン確認API
+// ログイン確認
 app.post('/api/login', (req, res) => {
   const pass = (req.body?.pass || '').trim();
-  if (pass === ADMIN_PASS) {
-    return res.json({ ok: true, role: 'admin' });
-  }
-  if (pass === PLAYER_PASS) {
-    return res.json({ ok: true, role: 'player' });
-  }
+  if (pass === ADMIN_PASS) return res.json({ ok: true, role: 'admin' });
+  if (pass === PLAYER_PASS) return res.json({ ok: true, role: 'player' });
   return res.status(401).json({ ok: false });
 });
 
-// パスワード変更API（管理者パスワードで認証）
+// パスワード変更（管理パスワードで保護）
 app.post('/api/password', (req, res) => {
   const current = (req.body?.adminPass || '').trim();
   if (current !== ADMIN_PASS) {
@@ -31,20 +27,15 @@ app.post('/api/password', (req, res) => {
   }
   const nextAdmin = (req.body?.newAdminPass || '').trim();
   const nextPlayer = (req.body?.newPlayerPass || '').trim();
-  if (nextAdmin) {
-    ADMIN_PASS = nextAdmin;
-  }
-  if (nextPlayer) {
-    PLAYER_PASS = nextPlayer;
-  }
+  if (nextAdmin) ADMIN_PASS = nextAdmin;
+  if (nextPlayer) PLAYER_PASS = nextPlayer;
   return res.json({ ok: true });
 });
 
-// ルートはログイン画面に誘導
+// ルートはログインへ
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
-
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, HOST, () => {
@@ -53,28 +44,26 @@ const server = app.listen(PORT, HOST, () => {
 
 const wss = new WebSocketServer({ server });
 
-// ゲーム全体の状態を保持する
 const state = {
   round: 0,
-  phase: 'lobby', // lobby | voting | result
+  phase: 'lobby', // lobby | voting | result | final
   question: '準備中',
   options: ['A', 'B'],
-  votes: new Map(), // playerId -> 'A' | 'B'
+  votes: new Map(), // playerId -> choice
   players: new Map(), // playerId -> { name, active }
   lastResult: null,
   history: [],
-  queue: [], // { id, question, options: [A, B] }
+  queue: [], // { id, question, options: [A,B] }
+  finalWinners: [],
 };
 
-// 接続ごとの情報を保持する
 const connections = new Map(); // ws -> { playerId, role }
-
 const validChoices = ['A', 'B'];
 
 function countActivePlayers() {
   let active = 0;
-  state.players.forEach((player) => {
-    if (player.active) active += 1;
+  state.players.forEach((p) => {
+    if (p.active) active += 1;
   });
   return active;
 }
@@ -82,9 +71,7 @@ function countActivePlayers() {
 function voteCounts() {
   const counts = { A: 0, B: 0 };
   state.votes.forEach((choice) => {
-    if (validChoices.includes(choice)) {
-      counts[choice] += 1;
-    }
+    if (validChoices.includes(choice)) counts[choice] += 1;
   });
   return counts;
 }
@@ -106,8 +93,6 @@ function connectedPlayerCounts() {
 function ensurePlayer(name, requestedId) {
   const displayName = (name || '').trim() || '名無し';
   let playerId = requestedId || null;
-
-  // requestedIdが無い場合は同名の既存プレイヤーを再利用する
   if (!playerId) {
     for (const [id, info] of state.players.entries()) {
       if (info.name === displayName) {
@@ -116,11 +101,7 @@ function ensurePlayer(name, requestedId) {
       }
     }
   }
-
-  if (!playerId) {
-    playerId = crypto.randomUUID();
-  }
-
+  if (!playerId) playerId = crypto.randomUUID();
   const existing = state.players.get(playerId) || {};
   const nextPlayer = {
     name: displayName,
@@ -151,6 +132,7 @@ function startRound(question, optionA, optionB) {
   state.options = [optionA?.trim() || 'A', optionB?.trim() || 'B'];
   state.votes.clear();
   state.lastResult = null;
+  state.finalWinners = [];
 }
 
 function startNextFromQueue() {
@@ -162,14 +144,9 @@ function startNextFromQueue() {
 }
 
 function revealResult() {
-  if (state.phase !== 'voting') {
-    state.phase = 'result';
-  } else {
-    state.phase = 'result';
-  }
+  state.phase = 'result';
   const counts = voteCounts();
   const minority = determineMinority(counts);
-  // 少数派が存在する場合: 少数派以外は脱落
   if (minority) {
     state.players.forEach((player, id) => {
       const choice = state.votes.get(id);
@@ -178,9 +155,8 @@ function revealResult() {
       }
     });
   } else {
-    // 同数の場合: 投票した人だけ残留、未投票は脱落
     state.players.forEach((player, id) => {
-      if (!player.active) return; // 既に脱落している人はそのまま
+      if (!player.active) return;
       const voted = state.votes.has(id);
       if (!voted) {
         player.active = false;
@@ -198,6 +174,17 @@ function revealResult() {
   state.history.push(state.lastResult);
 }
 
+function finalizeGame() {
+  state.phase = 'final';
+  const winners = [];
+  state.players.forEach((player, id) => {
+    if (player.active) {
+      winners.push({ id, name: player.name });
+    }
+  });
+  state.finalWinners = winners;
+}
+
 function resetGame() {
   state.round = 0;
   state.phase = 'lobby';
@@ -207,6 +194,7 @@ function resetGame() {
   state.history = [];
   state.options = ['A', 'B'];
   state.queue = [];
+  state.finalWinners = [];
   state.players.forEach((player) => {
     player.active = true;
   });
@@ -216,6 +204,11 @@ function buildPayload(playerId, role) {
   const counts = voteCounts();
   const minority = state.phase === 'result' ? determineMinority(counts) : null;
   const player = playerId ? state.players.get(playerId) : null;
+  const isWinner =
+    state.phase === 'final' && playerId
+      ? state.finalWinners.some((w) => w.id === playerId)
+      : null;
+
   const payload = {
     type: 'state',
     round: state.round,
@@ -227,11 +220,13 @@ function buildPayload(playerId, role) {
     totalPlayers: state.players.size,
     activePlayers: countActivePlayers(),
     votesSubmitted: state.votes.size,
+    finalWinners: state.phase === 'final' ? state.finalWinners : null,
     you: player
       ? {
           name: player.name,
           active: player.active,
           choice: state.votes.get(playerId) || null,
+          winner: isWinner,
         }
       : null,
     lastResult: state.lastResult,
@@ -250,6 +245,7 @@ function buildPayload(playerId, role) {
       counts,
       history: state.history,
       queue: state.queue,
+      finalWinners: state.finalWinners,
     };
   }
   return payload;
@@ -291,13 +287,25 @@ wss.on('connection', (ws) => {
     const info = connections.get(ws) || { role: 'player', playerId: null };
     switch (msg.type) {
       case 'register': {
-        const role = msg.role === 'admin' ? 'admin' : 'player';
+        const role = msg.role === 'admin' ? 'admin' : msg.role === 'viewer' ? 'viewer' : 'player';
+        if (role === 'viewer') {
+          connections.set(ws, { playerId: null, role: 'viewer' });
+          ws.send(JSON.stringify({ type: 'auth', ok: true, role: 'viewer' }));
+          sendState(ws);
+          break;
+        }
         const pass = (msg.pass || '').trim();
         const expected = role === 'admin' ? ADMIN_PASS : PLAYER_PASS;
         if (pass !== expected) {
           ws.send(JSON.stringify({ type: 'auth', ok: false, reason: 'invalid_password' }));
           ws.close();
           return;
+        }
+        if (role === 'admin') {
+          connections.set(ws, { playerId: null, role: 'admin' });
+          ws.send(JSON.stringify({ type: 'auth', ok: true, role: 'admin' }));
+          sendState(ws);
+          break;
         }
         const { playerId } = ensurePlayer(msg.name, msg.playerId);
         connections.set(ws, { playerId, role });
@@ -346,6 +354,12 @@ wss.on('connection', (ws) => {
         broadcastState();
         break;
       }
+      case 'admin:final': {
+        if (info.role !== 'admin') return;
+        finalizeGame();
+        broadcastState();
+        break;
+      }
       case 'admin:reset': {
         if (info.role !== 'admin') return;
         resetGame();
@@ -362,6 +376,5 @@ wss.on('connection', (ws) => {
     broadcastState();
   });
 
-  // 初期状態を返す
   sendState(ws);
 });
