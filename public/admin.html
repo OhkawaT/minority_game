@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>マイノリティゲーム - 管理</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <div class="card accent">
+        <h1>管理コンソール</h1>
+        <p>プリセットを追加しておき、結果表示後に「次の問題へ」で進行できます。</p>
+        <div class="legend">
+          <span class="pill"><small>フェーズ</small><span id="phase-label">待機</span></span>
+          <span class="pill"><small>ラウンド</small><strong id="round-label">0</strong></span>
+          <span class="pill"><small>接続</small><strong id="connected-label">0</strong></span>
+          <span class="pill"><small>アクティブ</small><strong id="active-label">0</strong></span>
+          <span class="pill"><small>投票済</small><strong id="votes-label">0</strong></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>出題/進行</h2>
+        <p>まずプリセットを複数追加しておき、結果表示後に「次の問題へ」でキュー先頭を開始します。</p>
+        <label for="question-input">問題文</label>
+        <textarea id="question-input" placeholder="例: 納会後に食べたいのは？"></textarea>
+        <div class="option-grid" style="margin-top: 10px;">
+          <div class="option-card">
+            <label for="option-a">選択肢 A</label>
+            <input id="option-a" type="text" placeholder="例: ラーメン" />
+          </div>
+          <div class="option-card">
+            <label for="option-b">選択肢 B</label>
+            <input id="option-b" type="text" placeholder="例: カレー" />
+          </div>
+        </div>
+        <div class="actions" style="margin-top: 12px;">
+          <button id="queue-add-btn" class="ghost">キューに追加</button>
+          <button id="queue-start-btn" class="secondary">次の問題へ（キュー先頭）</button>
+          <button id="start-btn">入力内容で即開始</button>
+          <button id="reveal-btn" class="secondary">結果表示</button>
+          <button id="reset-btn" class="ghost">全リセット</button>
+        </div>
+        <p class="footer">進行目安: 1) 必要数のプリセットを追加 → 2) 「次の問題へ」で開始 → 3) 回答 → 4) 「結果表示」 → 5) 再度「次の問題へ」</p>
+      </div>
+
+      <div class="card">
+        <div class="inline" style="justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 10px;">
+          <h2>プリセット一覧</h2>
+          <span class="status" id="queue-count">キュー 0 件</span>
+        </div>
+        <div id="queue-list" class="queue-list"></div>
+        <p id="queue-empty" class="footer">まだキューが空です。</p>
+      </div>
+
+      <div class="card">
+        <h2>現在の状況</h2>
+        <div class="results">
+          <div class="block">
+            <div class="legend">
+              <span class="badge blue">総参加</span>
+              <span id="summary-total">0 名</span>
+            </div>
+            <div class="legend">
+              <span class="badge green">アクティブ</span>
+              <span id="summary-active">0 名</span>
+            </div>
+          </div>
+          <div class="block">
+            <div class="legend">
+              <span class="badge">A</span>
+              <span id="summary-a">-</span>
+            </div>
+            <div class="legend">
+              <span class="badge">B</span>
+              <span id="summary-b">-</span>
+            </div>
+            <div class="legend">
+              <span class="badge red">少数派</span>
+              <span id="summary-minority">-</span>
+            </div>
+          </div>
+        </div>
+        <p id="question-preview" class="footer"></p>
+      </div>
+
+      <div class="card">
+        <div class="inline" style="justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 10px;">
+          <h2>プレイヤー一覧</h2>
+          <span class="status" id="player-note">接続確認中...</span>
+        </div>
+        <div id="players" class="players"></div>
+      </div>
+
+      <div id="toast" class="toast" style="display: none;"></div>
+    </main>
+
+    <script src="/admin.js"></script>
+  </body>
+</html>
