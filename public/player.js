@@ -182,7 +182,7 @@ function render(state) {
     const label = idx === 0 ? state.options?.[0] : state.options?.[1];
     const choice = idx === 0 ? 'A' : 'B';
     const caption = btn.querySelector('.muted');
-    let strongText = `${label || choice}`;
+    let strongText = `${choice}: ${label || choice}`;
     if (state.phase === 'result' && state.counts) {
       strongText += ` (${state.counts[choice]}票)`;
     }
