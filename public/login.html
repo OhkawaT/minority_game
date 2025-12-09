@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>マイノリティゲーム - ログイン</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <div class="card accent">
+        <h1>ログイン</h1>
+        <p>管理者用パスワードなら管理画面へ、参加用パスワードなら参加画面へ移動します。</p>
+      </div>
+
+      <div class="card">
+        <label for="login-pass">パスワード</label>
+        <div class="inline" style="gap: 12px; align-items: flex-start;">
+          <input id="login-pass" type="password" placeholder="共有されたパスワードを入力" />
+          <button id="login-btn">ログイン</button>
+        </div>
+        <p id="login-message" class="footer"></p>
+      </div>
+    </main>
+
+    <script src="/login.js"></script>
+  </body>
+</html>

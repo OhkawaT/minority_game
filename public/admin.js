@@ -3,6 +3,11 @@ const wsUrl = `${protocol}://${window.location.host}`;
 
 let ws = null;
 let reconnectTimer = null;
+let reconnectAllowed = true;
+
+const storageKeys = {
+  adminPass: 'mg_admin_pass',
+};
 
 const els = {
   phase: document.getElementById('phase-label'),
@@ -10,6 +15,8 @@ const els = {
   connected: document.getElementById('connected-label'),
   active: document.getElementById('active-label'),
   votes: document.getElementById('votes-label'),
+  newAdminPass: document.getElementById('new-admin-pass'),
+  newPlayerPass: document.getElementById('new-player-pass'),
   questionInput: document.getElementById('question-input'),
   optionA: document.getElementById('option-a'),
   optionB: document.getElementById('option-b'),
@@ -29,8 +36,18 @@ const els = {
   questionPreview: document.getElementById('question-preview'),
   players: document.getElementById('players'),
   playerNote: document.getElementById('player-note'),
+  logout: document.getElementById('logout-admin'),
   toast: document.getElementById('toast'),
 };
+
+function ensureLoggedIn() {
+  const pass = localStorage.getItem(storageKeys.adminPass) || '';
+  if (!pass) {
+    window.location.replace('/login.html');
+    return false;
+  }
+  return true;
+}
 
 function showToast(message, type = 'success') {
   els.toast.textContent = message;
@@ -42,20 +59,28 @@ function showToast(message, type = 'success') {
 }
 
 function connect() {
-  if (ws) {
-    ws.close();
-  }
+  if (!ensureLoggedIn()) return;
+  reconnectAllowed = true;
+  if (ws) ws.close();
+
   ws = new WebSocket(wsUrl);
 
   ws.addEventListener('open', () => {
-    ws.send(JSON.stringify({ type: 'register', role: 'admin', name: 'admin' }));
+    const pass = localStorage.getItem(storageKeys.adminPass) || '';
+    ws.send(JSON.stringify({ type: 'register', role: 'admin', name: 'admin', pass }));
   });
 
   ws.addEventListener('message', (event) => {
     let payload = null;
     try {
       payload = JSON.parse(event.data);
-    } catch (err) {
+    } catch {
+      return;
+    }
+    if (payload.type === 'auth' && payload.ok === false) {
+      showToast('管理パスワードが違います', 'warn');
+      reconnectAllowed = false;
+      ws.close();
       return;
     }
     if (payload.type === 'state') {
@@ -65,7 +90,7 @@ function connect() {
 
   ws.addEventListener('close', () => {
     els.phase.textContent = '再接続中...';
-    if (!reconnectTimer) {
+    if (!reconnectTimer && reconnectAllowed) {
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connect();
@@ -128,7 +153,7 @@ function render(state) {
   els.queueStartBtn.disabled = queue.length === 0 || state.phase === 'voting';
 }
 
-function renderQueue(queue, phase) {
+function renderQueue(queue) {
   els.queueList.innerHTML = '';
   els.queueCount.textContent = `キュー ${queue.length} 件`;
   els.queueEmpty.style.display = queue.length === 0 ? 'block' : 'none';
@@ -221,4 +246,59 @@ els.queueList.addEventListener('click', (e) => {
   }
 });
 
-connect();
+if (els.logout) {
+  els.logout.addEventListener('click', () => {
+    localStorage.removeItem(storageKeys.adminPass);
+    showToast('ログアウトしました');
+    window.location.replace('/login.html');
+  });
+}
+
+async function changePasswords() {
+  const adminPass = localStorage.getItem(storageKeys.adminPass) || '';
+  if (!adminPass) {
+    showToast('一度ログアウトし再ログインしてください', 'warn');
+    return;
+  }
+  const newAdminPass = els.newAdminPass?.value.trim() || '';
+  const newPlayerPass = els.newPlayerPass?.value.trim() || '';
+  if (!newAdminPass && !newPlayerPass) {
+    showToast('変更内容がありません', 'warn');
+    return;
+  }
+  try {
+    const res = await fetch('/api/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        adminPass,
+        newAdminPass,
+        newPlayerPass,
+      }),
+    });
+    if (!res.ok) {
+      showToast('パスワード変更に失敗しました', 'warn');
+      return;
+    }
+    if (newAdminPass) {
+      localStorage.setItem(storageKeys.adminPass, newAdminPass);
+    }
+    els.newAdminPass.value = '';
+    els.newPlayerPass.value = '';
+    showToast('パスワードを更新しました');
+    if (newAdminPass) {
+      connect(); // 新パスで再接続
+    }
+  } catch {
+    showToast('通信エラーが発生しました', 'warn');
+  }
+}
+
+const changePassBtn = document.getElementById('change-pass-btn');
+if (changePassBtn) {
+  changePassBtn.addEventListener('click', changePasswords);
+}
+
+if (ensureLoggedIn()) {
+  connect();
+}

@@ -3,6 +3,7 @@ const wsUrl = `${protocol}://${window.location.host}`;
 
 let ws = null;
 let reconnectTimer = null;
+let reconnectAllowed = true;
 let lastState = null;
 
 const els = {
@@ -15,6 +16,7 @@ const els = {
   voteStatus: document.getElementById('vote-status'),
   nameInput: document.getElementById('name-input'),
   saveName: document.getElementById('save-name'),
+  logout: document.getElementById('logout-btn'),
   nameHint: document.getElementById('name-hint'),
   summaryTotal: document.getElementById('summary-total'),
   summaryActive: document.getElementById('summary-active'),
@@ -28,7 +30,28 @@ const els = {
 const storageKeys = {
   id: 'mg_player_id',
   name: 'mg_player_name',
+  pass: 'mg_player_pass',
 };
+
+function getOrCreatePlayerId() {
+  let pid = localStorage.getItem(storageKeys.id);
+  if (!pid) {
+    pid = window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `pid_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem(storageKeys.id, pid);
+  }
+  return pid;
+}
+
+function ensureLoggedIn() {
+  const pass = localStorage.getItem(storageKeys.pass) || '';
+  if (!pass) {
+    window.location.replace('/login.html');
+    return false;
+  }
+  return true;
+}
 
 function loadProfile() {
   const savedName = localStorage.getItem(storageKeys.name) || '';
@@ -45,6 +68,8 @@ function showToast(message, type = 'success') {
 }
 
 function connect() {
+  if (!ensureLoggedIn()) return;
+  reconnectAllowed = true;
   if (ws) {
     ws.close();
   }
@@ -58,7 +83,15 @@ function connect() {
     let payload = null;
     try {
       payload = JSON.parse(event.data);
-    } catch (err) {
+    } catch {
+      return;
+    }
+    if (payload.type === 'auth' && payload.ok === false) {
+      els.activeStatus.textContent = '認証エラー';
+      els.activeStatus.className = 'status warn';
+      showToast('パスワードが違います', 'warn');
+      reconnectAllowed = false;
+      ws.close();
       return;
     }
     if (payload.type === 'registered') {
@@ -76,7 +109,7 @@ function connect() {
   ws.addEventListener('close', () => {
     els.activeStatus.textContent = '再接続中...';
     els.activeStatus.className = 'status warn';
-    if (!reconnectTimer) {
+    if (!reconnectTimer && reconnectAllowed) {
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connect();
@@ -88,13 +121,19 @@ function connect() {
 function register() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   const name = els.nameInput.value.trim() || '名無し';
-  const existingId = localStorage.getItem(storageKeys.id);
+  const existingId = getOrCreatePlayerId();
+  const pass = localStorage.getItem(storageKeys.pass) || '';
+  if (!pass) {
+    ensureLoggedIn();
+    return;
+  }
   ws.send(
     JSON.stringify({
       type: 'register',
       name,
       playerId: existingId,
       role: 'player',
+      pass,
     }),
   );
   localStorage.setItem(storageKeys.name, name);
@@ -185,5 +224,16 @@ els.optionButtons.forEach((btn) => {
   });
 });
 
-loadProfile();
-connect();
+if (els.logout) {
+  els.logout.addEventListener('click', () => {
+    localStorage.removeItem(storageKeys.pass);
+    localStorage.removeItem(storageKeys.id);
+    showToast('ログアウトしました');
+    window.location.replace('/login.html');
+  });
+}
+
+if (ensureLoggedIn()) {
+  loadProfile();
+  connect();
+}

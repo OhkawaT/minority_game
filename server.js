@@ -5,9 +5,46 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
+let ADMIN_PASS = process.env.ADMIN_PASS || 'admin252';
+let PLAYER_PASS = process.env.PLAYER_PASS || 'player';
 const app = express();
 
 app.use(express.json());
+
+// ログイン確認API
+app.post('/api/login', (req, res) => {
+  const pass = (req.body?.pass || '').trim();
+  if (pass === ADMIN_PASS) {
+    return res.json({ ok: true, role: 'admin' });
+  }
+  if (pass === PLAYER_PASS) {
+    return res.json({ ok: true, role: 'player' });
+  }
+  return res.status(401).json({ ok: false });
+});
+
+// パスワード変更API（管理者パスワードで認証）
+app.post('/api/password', (req, res) => {
+  const current = (req.body?.adminPass || '').trim();
+  if (current !== ADMIN_PASS) {
+    return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  }
+  const nextAdmin = (req.body?.newAdminPass || '').trim();
+  const nextPlayer = (req.body?.newPlayerPass || '').trim();
+  if (nextAdmin) {
+    ADMIN_PASS = nextAdmin;
+  }
+  if (nextPlayer) {
+    PLAYER_PASS = nextPlayer;
+  }
+  return res.json({ ok: true });
+});
+
+// ルートはログイン画面に誘導
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, HOST, () => {
@@ -68,8 +105,22 @@ function connectedPlayerCounts() {
 
 function ensurePlayer(name, requestedId) {
   const displayName = (name || '').trim() || '名無し';
-  const reuse = requestedId && state.players.has(requestedId);
-  const playerId = reuse ? requestedId : crypto.randomUUID();
+  let playerId = requestedId || null;
+
+  // requestedIdが無い場合は同名の既存プレイヤーを再利用する
+  if (!playerId) {
+    for (const [id, info] of state.players.entries()) {
+      if (info.name === displayName) {
+        playerId = id;
+        break;
+      }
+    }
+  }
+
+  if (!playerId) {
+    playerId = crypto.randomUUID();
+  }
+
   const existing = state.players.get(playerId) || {};
   const nextPlayer = {
     name: displayName,
@@ -231,8 +282,16 @@ wss.on('connection', (ws) => {
     switch (msg.type) {
       case 'register': {
         const role = msg.role === 'admin' ? 'admin' : 'player';
+        const pass = (msg.pass || '').trim();
+        const expected = role === 'admin' ? ADMIN_PASS : PLAYER_PASS;
+        if (pass !== expected) {
+          ws.send(JSON.stringify({ type: 'auth', ok: false, reason: 'invalid_password' }));
+          ws.close();
+          return;
+        }
         const { playerId } = ensurePlayer(msg.name, msg.playerId);
         connections.set(ws, { playerId, role });
+        ws.send(JSON.stringify({ type: 'auth', ok: true, role }));
         ws.send(JSON.stringify({ type: 'registered', playerId }));
         broadcastState();
         break;
