@@ -179,12 +179,41 @@ button:disabled {
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
+  position: relative;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 .option-card strong {
   display: block;
   font-size: 18px;
   margin-bottom: 6px;
+}
+
+.option-card:hover {
+  border-color: rgba(249, 115, 22, 0.5);
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.15);
+}
+
+.option-card.selected {
+  border: 2px solid var(--accent);
+  box-shadow: 0 10px 24px rgba(249, 115, 22, 0.28);
+  transform: translateY(-1px);
+}
+
+.option-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--accent);
+  color: #0b1222;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 12px;
 }
 
 .results {

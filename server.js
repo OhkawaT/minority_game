@@ -169,10 +169,20 @@ function revealResult() {
   }
   const counts = voteCounts();
   const minority = determineMinority(counts);
+  // 少数派が存在する場合: 少数派以外は脱落
   if (minority) {
     state.players.forEach((player, id) => {
       const choice = state.votes.get(id);
       if (choice !== minority) {
+        player.active = false;
+      }
+    });
+  } else {
+    // 同数の場合: 投票した人だけ残留、未投票は脱落
+    state.players.forEach((player, id) => {
+      if (!player.active) return; // 既に脱落している人はそのまま
+      const voted = state.votes.has(id);
+      if (!voted) {
         player.active = false;
       }
     });

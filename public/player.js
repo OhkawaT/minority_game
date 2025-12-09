@@ -182,6 +182,8 @@ function render(state) {
   els.optionButtons.forEach((btn) => {
     btn.disabled = !canVote;
     btn.classList.toggle('ghost', !canVote);
+    const choice = btn.dataset.choice;
+    btn.classList.toggle('selected', you.choice === choice);
   });
 
   if (you.choice) {
