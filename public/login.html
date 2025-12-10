@@ -10,11 +10,14 @@
     <main>
       <div class="card accent">
         <h1>ログイン</h1>
-        <p>管理者用パスワードなら管理画面へ、参加用パスワードなら参加画面へ移動します。</p>
+        <p>参加者はここで表示名とパスワードを入力して入場します（名前は後から変更できません）。</p>
       </div>
 
       <div class="card">
-        <label for="login-pass">パスワード</label>
+        <label for="login-name">表示名（参加者用・1回のみ）</label>
+        <input id="login-name" type="text" maxlength="20" placeholder="例: たろう" />
+
+        <label for="login-pass" style="margin-top: 12px;">パスワード</label>
         <div class="inline" style="gap: 12px; align-items: flex-start;">
           <input id="login-pass" type="password" placeholder="共有されたパスワードを入力" />
           <button id="login-btn">ログイン</button>

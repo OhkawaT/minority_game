@@ -20,16 +20,14 @@
       </div>
 
       <div class="card">
-        <h2>あなたの登録</h2>
-        <p>名前は端末に保存され、再接続時に自動で使用します。</p>
-        <label for="name-input">表示名</label>
-        <div class="inline">
-          <input id="name-input" type="text" maxlength="20" placeholder="例: たろう" />
-          <button id="save-name">登録/更新</button>
-        </div>
-        <div class="inline" style="margin-top: 8px;">
+        <h2>ログイン情報</h2>
+        <p>ログイン時に登録した表示名は変更できません。</p>
+        <div class="inline" style="justify-content: space-between;">
+          <div>
+            <div class="badge blue">表示名</div>
+            <div id="name-display" class="metric">-</div>
+          </div>
           <button id="logout-btn" class="ghost">ログアウト</button>
-          <span id="name-hint" class="footer"></span>
         </div>
       </div>
 

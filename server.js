@@ -60,10 +60,16 @@ const state = {
 const connections = new Map(); // ws -> { playerId, role }
 const validChoices = ['A', 'B'];
 
+function setPlayerStatus(player, status) {
+  if (!player) return;
+  player.status = status;
+  player.active = status === 'active';
+}
+
 function countActivePlayers() {
   let active = 0;
   state.players.forEach((p) => {
-    if (p.active) active += 1;
+    if (p.status === 'active') active += 1;
   });
   return active;
 }
@@ -92,7 +98,9 @@ function connectedPlayerCounts() {
 
 function ensurePlayer(name, requestedId) {
   const displayName = (name || '').trim() || '名無し';
-  let playerId = requestedId || null;
+  let playerId = requestedId && state.players.has(requestedId) ? requestedId : null;
+  let isNew = false;
+
   if (!playerId) {
     for (const [id, info] of state.players.entries()) {
       if (info.name === displayName) {
@@ -101,14 +109,22 @@ function ensurePlayer(name, requestedId) {
       }
     }
   }
-  if (!playerId) playerId = crypto.randomUUID();
-  const existing = state.players.get(playerId) || {};
-  const nextPlayer = {
-    name: displayName,
-    active: existing.active !== undefined ? existing.active : true,
-  };
-  state.players.set(playerId, nextPlayer);
-  return { playerId, player: nextPlayer };
+
+  if (!playerId) {
+    playerId = crypto.randomUUID();
+    isNew = true;
+  }
+
+const existing = state.players.get(playerId) || {};
+const status =
+  existing.status !== undefined ? existing.status : state.round === 0 ? 'active' : 'waiting';
+const nextPlayer = {
+  name: displayName,
+  status,
+  active: status === 'active',
+};
+state.players.set(playerId, nextPlayer);
+return { playerId, player: nextPlayer, isNew };
 }
 
 function addPreset(question, optionA, optionB) {
@@ -151,15 +167,15 @@ function revealResult() {
     state.players.forEach((player, id) => {
       const choice = state.votes.get(id);
       if (choice !== minority) {
-        player.active = false;
+        setPlayerStatus(player, 'out');
       }
     });
   } else {
     state.players.forEach((player, id) => {
-      if (!player.active) return;
+      if (player.status !== 'active') return;
       const voted = state.votes.has(id);
       if (!voted) {
-        player.active = false;
+        setPlayerStatus(player, 'out');
       }
     });
   }
@@ -178,14 +194,14 @@ function finalizeGame() {
   state.phase = 'final';
   const winners = [];
   state.players.forEach((player, id) => {
-    if (player.active) {
+    if (player.status === 'active') {
       winners.push({ id, name: player.name });
     }
   });
   state.finalWinners = winners;
 }
 
-function resetGame() {
+function resetGame(clearQueue = true) {
   state.round = 0;
   state.phase = 'lobby';
   state.question = '準備中';
@@ -193,10 +209,12 @@ function resetGame() {
   state.lastResult = null;
   state.history = [];
   state.options = ['A', 'B'];
-  state.queue = [];
+  if (clearQueue) {
+    state.queue = [];
+  }
   state.finalWinners = [];
   state.players.forEach((player) => {
-    player.active = true;
+    setPlayerStatus(player, 'active');
   });
 }
 
@@ -225,6 +243,7 @@ function buildPayload(playerId, role) {
       ? {
           name: player.name,
           active: player.active,
+          status: player.status,
           choice: state.votes.get(playerId) || null,
           winner: isWinner,
         }
@@ -238,6 +257,7 @@ function buildPayload(playerId, role) {
       players: Array.from(state.players.entries()).map(([id, info]) => ({
         id,
         name: info.name,
+        status: info.status,
         active: info.active,
         choice: state.votes.get(id) || null,
         connected: connected.get(id) || 0,
@@ -269,8 +289,14 @@ function handleVote(playerId, choice) {
   if (state.phase !== 'voting') return;
   if (!validChoices.includes(choice)) return;
   const player = state.players.get(playerId);
-  if (!player || !player.active) return;
+  if (!player || player.status !== 'active') return;
   state.votes.set(playerId, choice);
+}
+
+function removePlayer(playerId) {
+  if (!playerId) return;
+  state.players.delete(playerId);
+  state.votes.delete(playerId);
 }
 
 wss.on('connection', (ws) => {
@@ -307,10 +333,20 @@ wss.on('connection', (ws) => {
           sendState(ws);
           break;
         }
-        const { playerId } = ensurePlayer(msg.name, msg.playerId);
+        const { playerId, player, isNew } = ensurePlayer(msg.name, msg.playerId);
+        if (player && player.status === 'waiting' && state.round === 0) {
+          setPlayerStatus(player, 'active');
+        }
         connections.set(ws, { playerId, role });
         ws.send(JSON.stringify({ type: 'auth', ok: true, role }));
         ws.send(JSON.stringify({ type: 'registered', playerId }));
+        broadcastState();
+        break;
+      }
+      case 'leave': {
+        if (!info.playerId) return;
+        removePlayer(info.playerId);
+        connections.set(ws, { playerId: null, role: info.role });
         broadcastState();
         break;
       }
@@ -362,7 +398,13 @@ wss.on('connection', (ws) => {
       }
       case 'admin:reset': {
         if (info.role !== 'admin') return;
-        resetGame();
+        resetGame(true);
+        broadcastState();
+        break;
+      }
+      case 'admin:reset:keep-queue': {
+        if (info.role !== 'admin') return;
+        resetGame(false);
         broadcastState();
         break;
       }

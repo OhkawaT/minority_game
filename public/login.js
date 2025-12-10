@@ -1,8 +1,10 @@
 const storageKeys = {
   adminPass: 'mg_admin_pass',
   playerPass: 'mg_player_pass',
+  playerName: 'mg_player_name',
 };
 
+const nameInput = document.getElementById('login-name');
 const passInput = document.getElementById('login-pass');
 const loginBtn = document.getElementById('login-btn');
 const messageEl = document.getElementById('login-message');
@@ -10,6 +12,11 @@ const messageEl = document.getElementById('login-message');
 function setMessage(text, type = 'info') {
   messageEl.textContent = text;
   messageEl.style.color = type === 'error' ? '#ef4444' : '#94a3b8';
+}
+
+function loadSavedName() {
+  const savedName = localStorage.getItem(storageKeys.playerName) || '';
+  if (nameInput) nameInput.value = savedName;
 }
 
 async function checkPass(pass) {
@@ -27,8 +34,18 @@ async function checkPass(pass) {
   }
 }
 
-async function handleLogin(inputPass) {
-  const pass = (inputPass || '').trim();
+function ensurePlayerId() {
+  let pid = localStorage.getItem('mg_player_id');
+  if (!pid) {
+    pid = window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `pid_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem('mg_player_id', pid);
+  }
+}
+
+async function handleLogin() {
+  const pass = (passInput.value || '').trim();
   if (!pass) {
     setMessage('パスワードを入力してください', 'error');
     return;
@@ -39,37 +56,39 @@ async function handleLogin(inputPass) {
     setMessage('パスワードが違います', 'error');
     return;
   }
-
   if (role === 'admin') {
     localStorage.setItem(storageKeys.adminPass, pass);
     setMessage('管理者としてログインします...');
     window.location.replace('/admin.html');
-  } else {
-    // プレイヤーIDが未発行ならここで発行して保存
-    const existingId = localStorage.getItem('mg_player_id');
-    if (!existingId) {
-      const pid = window.crypto?.randomUUID
-        ? window.crypto.randomUUID()
-        : `pid_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem('mg_player_id', pid);
-    }
-    localStorage.setItem(storageKeys.playerPass, pass);
-    setMessage('参加者としてログインします...');
-    window.location.replace('/index.html');
+    return;
   }
+  const name = (nameInput.value || '').trim();
+  if (!name) {
+    setMessage('表示名を入力してください', 'error');
+    return;
+  }
+  localStorage.setItem(storageKeys.playerPass, pass);
+  localStorage.setItem(storageKeys.playerName, name);
+  ensurePlayerId();
+  setMessage('参加者としてログインします...');
+  window.location.replace('/index.html');
 }
 
-loginBtn.addEventListener('click', () => {
-  handleLogin(passInput.value);
-});
+loginBtn.addEventListener('click', handleLogin);
 
 passInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    handleLogin(passInput.value);
+    handleLogin();
+  }
+});
+nameInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    handleLogin();
   }
 });
 
-// 保存済みなら自動判定
+loadSavedName();
+
 (async () => {
   const savedAdmin = localStorage.getItem(storageKeys.adminPass);
   if (savedAdmin) {
@@ -81,7 +100,8 @@ passInput.addEventListener('keypress', (e) => {
     }
   }
   const savedPlayer = localStorage.getItem(storageKeys.playerPass);
-  if (savedPlayer) {
+  const savedName = localStorage.getItem(storageKeys.playerName);
+  if (savedPlayer && savedName) {
     const role = await checkPass(savedPlayer);
     if (role === 'player') {
       setMessage('参加者として自動ログインします...');

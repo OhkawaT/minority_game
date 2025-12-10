@@ -14,10 +14,8 @@ const els = {
   question: document.getElementById('question-text'),
   activeStatus: document.getElementById('active-status'),
   voteStatus: document.getElementById('vote-status'),
-  nameInput: document.getElementById('name-input'),
-  saveName: document.getElementById('save-name'),
+  nameDisplay: document.getElementById('name-display'),
   logout: document.getElementById('logout-btn'),
-  nameHint: document.getElementById('name-hint'),
   summaryTotal: document.getElementById('summary-total'),
   summaryActive: document.getElementById('summary-active'),
   summaryA: document.getElementById('summary-a'),
@@ -46,16 +44,23 @@ function getOrCreatePlayerId() {
 
 function ensureLoggedIn() {
   const pass = localStorage.getItem(storageKeys.pass) || '';
-  if (!pass) {
+  const name = localStorage.getItem(storageKeys.name) || '';
+  if (!pass || !name) {
     window.location.replace('/login.html');
     return false;
   }
   return true;
 }
 
-function loadProfile() {
+function loadName() {
   const savedName = localStorage.getItem(storageKeys.name) || '';
-  els.nameInput.value = savedName;
+  if (!savedName) {
+    window.location.replace('/login.html');
+    return;
+  }
+  if (els.nameDisplay) {
+    els.nameDisplay.textContent = savedName;
+  }
 }
 
 function showToast(message, type = 'success') {
@@ -120,7 +125,7 @@ function connect() {
 
 function register() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  const name = els.nameInput.value.trim() || '名無し';
+  const name = localStorage.getItem(storageKeys.name) || '名無し';
   const existingId = getOrCreatePlayerId();
   const pass = localStorage.getItem(storageKeys.pass) || '';
   if (!pass) {
@@ -136,8 +141,6 @@ function register() {
       pass,
     }),
   );
-  localStorage.setItem(storageKeys.name, name);
-  els.nameHint.textContent = `登録名: ${name}`;
 }
 
 function sendVote(choice) {
@@ -159,8 +162,10 @@ function render(state) {
   els.votesCount.textContent = `${state.votesSubmitted} 件`;
   els.question.textContent = state.question || '準備中';
 
-  const you = state.you || { active: false, choice: null, winner: null };
-  if (you.active) {
+  const you = state.you || { active: false, status: 'waiting', choice: null, winner: null };
+  const status = you.status || (you.active ? 'active' : 'waiting');
+
+  if (status === 'active') {
     if (state.phase === 'final') {
       if (you.winner) {
         els.activeStatus.textContent = 'Winner';
@@ -173,8 +178,11 @@ function render(state) {
       els.activeStatus.textContent = '参加中';
       els.activeStatus.className = 'status ok';
     }
+  } else if (status === 'out') {
+    els.activeStatus.textContent = '脱落';
+    els.activeStatus.className = 'status warn';
   } else {
-    els.activeStatus.textContent = state.totalPlayers === 0 ? '待機中' : '脱落';
+    els.activeStatus.textContent = '未参加（次のゲームをお待ちください）';
     els.activeStatus.className = 'status warn';
   }
 
@@ -192,7 +200,7 @@ function render(state) {
     }
   });
 
-  const canVote = state.phase === 'voting' && you.active;
+  const canVote = state.phase === 'voting' && status === 'active';
   els.optionButtons.forEach((btn) => {
     btn.disabled = !canVote;
     btn.classList.toggle('ghost', !canVote);
@@ -200,7 +208,11 @@ function render(state) {
     btn.classList.toggle('selected', you.choice === choice);
   });
 
-  if (you.choice) {
+  if (status === 'waiting') {
+    els.voteStatus.textContent = '未参加です。次のゲーム開始までお待ちください。';
+  } else if (status === 'out') {
+    els.voteStatus.textContent = '脱落しているため投票できません。';
+  } else if (you.choice) {
     els.voteStatus.textContent = `あなたの選択: ${you.choice}`;
   } else if (canVote) {
     els.voteStatus.textContent = 'まだ未選択です。どちらかをタップしてください。';
@@ -239,12 +251,6 @@ function render(state) {
   }
 }
 
-// イベント登録
-els.saveName.addEventListener('click', () => {
-  register();
-  showToast('登録しました');
-});
-
 els.optionButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
     const choice = btn.dataset.choice;
@@ -255,14 +261,18 @@ els.optionButtons.forEach((btn) => {
 
 if (els.logout) {
   els.logout.addEventListener('click', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'leave' }));
+    }
     localStorage.removeItem(storageKeys.pass);
     localStorage.removeItem(storageKeys.id);
+    localStorage.removeItem(storageKeys.name);
     showToast('ログアウトしました');
     window.location.replace('/login.html');
   });
 }
 
 if (ensureLoggedIn()) {
-  loadProfile();
+  loadName();
   connect();
 }

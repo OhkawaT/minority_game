@@ -24,6 +24,7 @@ const els = {
   revealBtn: document.getElementById('reveal-btn'),
   finalBtn: document.getElementById('final-btn'),
   resetBtn: document.getElementById('reset-btn'),
+  softResetBtn: document.getElementById('soft-reset-btn'),
   queueAddBtn: document.getElementById('queue-add-btn'),
   queueStartBtn: document.getElementById('queue-start-btn'),
   queueList: document.getElementById('queue-list'),
@@ -206,12 +207,20 @@ function renderPlayers(list, state) {
   sorted.forEach((p) => {
     const div = document.createElement('div');
     div.className = 'player';
-    const status = p.active ? 'badge green' : 'badge red';
+    let statusClass = 'badge red';
+    let statusLabel = '脱落';
+    if (p.status === 'active') {
+      statusClass = 'badge green';
+      statusLabel = '残留';
+    } else if (p.status === 'waiting') {
+      statusClass = 'badge blue';
+      statusLabel = '未参加';
+    }
     const vote = p.choice ? `${p.choice}` : '-';
     const connected = p.connected > 0 ? `${p.connected} 接続` : '未接続';
     div.innerHTML = `
       <div class="name">${p.name}</div>
-      <div class="meta">状態: <span class="${status}">${p.active ? '残留' : '脱落'}</span></div>
+      <div class="meta">状態: <span class="${statusClass}">${statusLabel}</span></div>
       <div class="meta">投票: ${vote}</div>
       <div class="meta">接続: ${connected}</div>
     `;
@@ -223,7 +232,7 @@ function renderPlayers(list, state) {
     fragments.appendChild(div);
   });
   els.players.appendChild(fragments);
-  const activeConnected = list.filter((p) => p.connected > 0 && p.active).length;
+  const activeConnected = list.filter((p) => p.connected > 0 && p.status === 'active').length;
   els.playerNote.textContent = `アクティブ接続: ${activeConnected} / ${list.length}`;
 }
 
@@ -297,6 +306,15 @@ els.resetBtn.addEventListener('click', () => {
   sendAdmin('admin:reset');
   showToast('リセットしました');
 });
+
+if (els.softResetBtn) {
+  els.softResetBtn.addEventListener('click', () => {
+    const ok = confirm('キューを残したまま試合状況だけリセットしますか？');
+    if (!ok) return;
+    sendAdmin('admin:reset:keep-queue');
+    showToast('状況のみリセットしました');
+  });
+}
 
 els.queueList.addEventListener('click', (e) => {
   const target = e.target;
