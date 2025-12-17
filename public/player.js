@@ -5,6 +5,7 @@ let ws = null;
 let reconnectTimer = null;
 let reconnectAllowed = true;
 let lastState = null;
+let lastAnnouncedResultAt = null;
 
 const els = {
   phase: document.getElementById('phase-label'),
@@ -22,6 +23,10 @@ const els = {
   summaryB: document.getElementById('summary-b'),
   summaryMinority: document.getElementById('summary-minority'),
   toast: document.getElementById('toast'),
+  resultModal: document.getElementById('result-modal'),
+  resultModalTitle: document.getElementById('result-modal-title'),
+  resultModalBody: document.getElementById('result-modal-body'),
+  resultModalClose: document.getElementById('result-modal-close'),
   optionButtons: Array.from(document.querySelectorAll('#option-area button')),
 };
 
@@ -72,6 +77,96 @@ function showToast(message, type = 'success') {
   }, 2000);
 }
 
+function setActiveStatus(text, typeClass) {
+  if (!els.activeStatus) return;
+  els.activeStatus.textContent = text;
+  els.activeStatus.className = `status prominent ${typeClass || ''}`.trim();
+}
+
+function closeResultModal() {
+  if (!els.resultModal) return;
+  els.resultModal.classList.remove('open');
+  els.resultModal.setAttribute('aria-hidden', 'true');
+}
+
+function openResultModal({ title, outcomeText, outcomeKind, rows }) {
+  if (!els.resultModal || !els.resultModalBody) return;
+  if (els.resultModalTitle) {
+    els.resultModalTitle.textContent = title;
+  }
+
+  els.resultModalBody.textContent = '';
+
+  const outcome = document.createElement('div');
+  outcome.className = `result-outcome ${outcomeKind || ''}`.trim();
+  outcome.textContent = outcomeText;
+  els.resultModalBody.appendChild(outcome);
+
+  if (rows && rows.length) {
+    const grid = document.createElement('div');
+    grid.className = 'modal-grid';
+    rows.forEach(({ label, value }) => {
+      const row = document.createElement('div');
+      row.className = 'modal-row';
+
+      const labelEl = document.createElement('span');
+      labelEl.className = 'label';
+      labelEl.textContent = label;
+
+      const valueEl = document.createElement('span');
+      valueEl.className = 'value';
+      valueEl.textContent = value;
+
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+      grid.appendChild(row);
+    });
+    els.resultModalBody.appendChild(grid);
+  }
+
+  els.resultModal.classList.add('open');
+  els.resultModal.setAttribute('aria-hidden', 'false');
+}
+
+function showRoundResultModal(state) {
+  const you = state.you || { active: false, status: 'waiting', choice: null, winner: null };
+  const status = you.status || (you.active ? 'active' : 'waiting');
+  const counts = state.counts || { A: 0, B: 0 };
+  const choiceText = you.choice ? you.choice : '未投票';
+
+  const outcomeKind = status === 'out' ? 'out' : status === 'waiting' ? 'waiting' : 'survive';
+  const outcomeText = status === 'out' ? '脱落' : status === 'waiting' ? '未参加' : '生存';
+
+  const minorityText = state.minority ? state.minority : '同数';
+  const minorityNote = state.minority ? `少数派: ${minorityText}` : '同数（未投票は脱落）';
+
+  openResultModal({
+    title: `第${state.round || 0}ラウンド 結果`,
+    outcomeText,
+    outcomeKind,
+    rows: [
+      { label: '投票数', value: `A ${counts.A}票 / B ${counts.B}票` },
+      { label: '判定', value: minorityNote },
+      { label: 'あなたの選択', value: choiceText },
+    ],
+  });
+}
+
+function showFinalResultModal(state) {
+  const you = state.you || { active: false, status: 'waiting', choice: null, winner: null };
+  const status = you.status || (you.active ? 'active' : 'waiting');
+  const winners = Array.isArray(state.finalWinners) ? state.finalWinners : [];
+  const outcomeText = status === 'waiting' ? '未参加' : you.winner ? '勝利' : '敗北';
+  const outcomeKind = status === 'waiting' ? 'waiting' : you.winner ? 'survive' : 'out';
+
+  openResultModal({
+    title: '最終結果',
+    outcomeText,
+    outcomeKind,
+    rows: [{ label: '勝者数', value: `${winners.length} 名` }],
+  });
+}
+
 function connect() {
   if (!ensureLoggedIn()) return;
   reconnectAllowed = true;
@@ -92,8 +187,7 @@ function connect() {
       return;
     }
     if (payload.type === 'auth' && payload.ok === false) {
-      els.activeStatus.textContent = '認証エラー';
-      els.activeStatus.className = 'status warn';
+      setActiveStatus('認証エラー', 'warn');
       showToast('パスワードが違います', 'warn');
       reconnectAllowed = false;
       ws.close();
@@ -106,14 +200,14 @@ function connect() {
       return;
     }
     if (payload.type === 'state') {
+      const prevState = lastState;
       lastState = payload;
-      render(payload);
+      render(payload, prevState);
     }
   });
 
   ws.addEventListener('close', () => {
-    els.activeStatus.textContent = '再接続中...';
-    els.activeStatus.className = 'status warn';
+    setActiveStatus('再接続中...', 'warn');
     if (!reconnectTimer && reconnectAllowed) {
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
@@ -148,7 +242,7 @@ function sendVote(choice) {
   ws.send(JSON.stringify({ type: 'vote', choice }));
 }
 
-function render(state) {
+function render(state, prevState) {
   const phaseLabel =
     state.phase === 'voting'
       ? '回答受付中'
@@ -168,22 +262,19 @@ function render(state) {
   if (status === 'active') {
     if (state.phase === 'final') {
       if (you.winner) {
-        els.activeStatus.textContent = 'Winner';
-        els.activeStatus.className = 'status ok';
+        setActiveStatus('勝者', 'final-win');
       } else {
-        els.activeStatus.textContent = 'Loser';
-        els.activeStatus.className = 'status warn';
+        setActiveStatus('敗者', 'final-lose');
       }
+    } else if (state.phase === 'result') {
+      setActiveStatus('生存', 'ok');
     } else {
-      els.activeStatus.textContent = '参加中';
-      els.activeStatus.className = 'status ok';
+      setActiveStatus('参加中', 'ok');
     }
   } else if (status === 'out') {
-    els.activeStatus.textContent = '脱落';
-    els.activeStatus.className = 'status warn';
+    setActiveStatus('脱落', 'out');
   } else {
-    els.activeStatus.textContent = '未参加（次のゲームをお待ちください）';
-    els.activeStatus.className = 'status warn';
+    setActiveStatus('未参加（次のゲームをお待ちください）', 'warn');
   }
 
   els.optionButtons.forEach((btn, idx) => {
@@ -241,13 +332,34 @@ function render(state) {
         els.summaryA.classList.add('highlight-majority');
       }
     } else {
-      els.summaryMinority.textContent = '同数のため全員残留';
+      els.summaryMinority.textContent = '同数（未投票は脱落）';
       els.summaryMinority.className = 'highlight-majority';
     }
   } else {
     els.summaryA.textContent = '-';
     els.summaryB.textContent = '-';
     els.summaryMinority.textContent = '-';
+  }
+
+  if (state.phase === 'result') {
+    const announcedAt = state.lastResult?.at || null;
+    if (announcedAt && announcedAt !== lastAnnouncedResultAt) {
+      lastAnnouncedResultAt = announcedAt;
+      const prevYou = prevState?.you || null;
+      const prevStatus = prevYou ? prevYou.status || (prevYou.active ? 'active' : 'waiting') : null;
+      const becameOut = prevStatus === 'active' && status === 'out';
+      if (status !== 'out' || becameOut) {
+        showRoundResultModal(state);
+      } else {
+        closeResultModal();
+      }
+    }
+  } else if (state.phase === 'final') {
+    if (!prevState || prevState.phase !== 'final') {
+      showFinalResultModal(state);
+    }
+  } else if (prevState && (prevState.phase === 'result' || prevState.phase === 'final')) {
+    closeResultModal();
   }
 }
 
@@ -274,5 +386,22 @@ if (els.logout) {
 
 if (ensureLoggedIn()) {
   loadName();
+
+  if (els.resultModalClose) {
+    els.resultModalClose.addEventListener('click', closeResultModal);
+  }
+  if (els.resultModal) {
+    els.resultModal.addEventListener('click', (event) => {
+      if (event.target?.dataset?.modalClose === '1') {
+        closeResultModal();
+      }
+    });
+  }
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeResultModal();
+    }
+  });
+
   connect();
 }

@@ -37,7 +37,7 @@
             <h2>出題</h2>
             <p id="question-text">管理者が準備中...</p>
           </div>
-          <div id="active-status" class="status warn">接続中...</div>
+          <div id="active-status" class="status prominent warn">接続中...</div>
         </div>
 
         <div id="option-area" class="option-grid" style="margin: 12px 0 8px;">
@@ -80,6 +80,17 @@
               <span id="summary-minority" class="metric">-</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div id="result-modal" class="modal" aria-hidden="true">
+        <div class="modal-overlay" data-modal-close="1"></div>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="result-modal-title">
+          <div class="modal-header">
+            <h2 id="result-modal-title" class="modal-title">結果</h2>
+            <button id="result-modal-close" class="ghost modal-close" type="button">閉じる</button>
+          </div>
+          <div id="result-modal-body" class="modal-body"></div>
         </div>
       </div>
 

@@ -98,9 +98,23 @@ p {
   color: var(--text);
 }
 
+.status.prominent {
+  font-size: clamp(18px, 4vw, 28px);
+  font-weight: 900;
+  padding: 10px 16px;
+  border-radius: 14px;
+  letter-spacing: 0.4px;
+}
+
 .status.ok {
   color: var(--success);
   background: rgba(34, 197, 94, 0.12);
+}
+
+.status.out {
+  color: var(--accent-strong);
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.32);
 }
 
 .status.final-win {
@@ -395,4 +409,117 @@ button:disabled {
   font-size: 13px;
   text-align: center;
   margin-top: 16px;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 999;
+}
+
+.modal.open {
+  display: flex;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  position: relative;
+  width: min(560px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  box-shadow: var(--shadow);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+}
+
+.modal-close {
+  padding: 10px 12px;
+  font-size: 14px;
+  border-radius: 12px;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-outcome {
+  text-align: center;
+  font-size: clamp(22px, 5vw, 34px);
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  padding: 14px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.result-outcome.survive {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
+.result-outcome.out {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecdd3;
+}
+
+.result-outcome.waiting {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fed7aa;
+}
+
+.modal-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.modal-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.modal-row .label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.modal-row .value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
 }
