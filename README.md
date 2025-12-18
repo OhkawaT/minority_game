@@ -28,7 +28,7 @@ https://minority-game.onrender.com/admin.html
 
 ### 参加者
 https://minority-game.onrender.com/index.html
-1. ログイン後、任意で表示名を変更できる
+1. ログイン時、任意で表示名を変更できる
 2. 管理者が問題を発行すると投票が行えるようになる
 3. 結果表示までは変更可能
 4. 投票中は他の参加者の投票状況は分からない
