@@ -104,7 +104,11 @@ function render(state) {
     } else {
       els.optA.parentElement.classList.remove('highlight-minority');
       els.optB.parentElement.classList.remove('highlight-minority');
-      els.minority.textContent = '同数';
+      if (state.counts.A === 0 || state.counts.B === 0) {
+        els.minority.textContent = '無効（片方0票）';
+      } else {
+        els.minority.textContent = '同数';
+      }
     }
   } else {
     els.optAVotes.textContent = '-';

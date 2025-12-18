@@ -137,8 +137,14 @@ function showRoundResultModal(state) {
   const outcomeKind = status === 'out' ? 'out' : status === 'waiting' ? 'waiting' : 'survive';
   const outcomeText = status === 'out' ? '脱落' : status === 'waiting' ? '未参加' : '生存';
 
-  const minorityText = state.minority ? state.minority : '同数';
-  const minorityNote = state.minority ? `少数派: ${minorityText}` : '同数（未投票は脱落）';
+  let minorityNote = '';
+  if (state.minority) {
+    minorityNote = `少数派: ${state.minority}`;
+  } else if (counts.A === 0 || counts.B === 0) {
+    minorityNote = '無効（片方0票）: 全員生存';
+  } else {
+    minorityNote = '同数: 全員生存';
+  }
 
   openResultModal({
     title: `第${state.round || 0}ラウンド 結果`,
@@ -331,8 +337,11 @@ function render(state, prevState) {
         els.summaryB.classList.add('highlight-minority');
         els.summaryA.classList.add('highlight-majority');
       }
+    } else if (state.counts.A === 0 || state.counts.B === 0) {
+      els.summaryMinority.textContent = '無効（片方0票）: 全員生存';
+      els.summaryMinority.className = 'highlight-majority';
     } else {
-      els.summaryMinority.textContent = '同数（未投票は脱落）';
+      els.summaryMinority.textContent = '同数: 全員生存';
       els.summaryMinority.className = 'highlight-majority';
     }
   } else {

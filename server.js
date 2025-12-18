@@ -83,6 +83,8 @@ function voteCounts() {
 }
 
 function determineMinority(counts) {
+  // 片方が0票の場合は無効（全員生存扱い）
+  if (counts.A === 0 || counts.B === 0) return null;
   if (counts.A === counts.B) return null;
   return counts.A < counts.B ? 'A' : 'B';
 }
@@ -165,19 +167,14 @@ function revealResult() {
   const minority = determineMinority(counts);
   if (minority) {
     state.players.forEach((player, id) => {
+      if (player.status !== 'active') return;
       const choice = state.votes.get(id);
       if (choice !== minority) {
         setPlayerStatus(player, 'out');
       }
     });
   } else {
-    state.players.forEach((player, id) => {
-      if (player.status !== 'active') return;
-      const voted = state.votes.has(id);
-      if (!voted) {
-        setPlayerStatus(player, 'out');
-      }
-    });
+    // 同数、または片方0票は無効として扱い、誰も脱落させない
   }
   state.lastResult = {
     round: state.round,

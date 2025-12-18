@@ -158,8 +158,11 @@ function render(state) {
     if (state.minority) {
       els.summaryMinority.textContent = `${state.minority} が少数派`;
       els.summaryMinority.className = 'highlight-minority';
+    } else if (admin.counts && (admin.counts.A === 0 || admin.counts.B === 0)) {
+      els.summaryMinority.textContent = '無効（片方0票）のため全員残留';
+      els.summaryMinority.className = 'highlight-majority';
     } else {
-      els.summaryMinority.textContent = '同数（投票者のみ残留）';
+      els.summaryMinority.textContent = '同数のため全員残留';
       els.summaryMinority.className = 'highlight-majority';
     }
   } else {
