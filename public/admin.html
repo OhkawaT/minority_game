@@ -64,6 +64,24 @@
       </div>
 
       <div class="card">
+        <h2>お題の一括登録</h2>
+        <p>1行1問で「質問？ 選択肢A / 選択肢B」形式、またはCSV/TSVで貼り付けできます。</p>
+        <label for="bulk-input">リスト貼り付け</label>
+        <textarea id="bulk-input" placeholder="例: 1. メモはどうとる？ 紙に書く / スマホに入力"></textarea>
+        <div class="option-grid" style="margin-top: 10px;">
+          <div class="option-card">
+            <label for="bulk-file">ファイル読み込み</label>
+            <input id="bulk-file" type="file" accept=".txt,.csv,.tsv" />
+          </div>
+        </div>
+        <div class="actions" style="margin-top: 12px;">
+          <button id="bulk-add-btn" class="secondary">キューへ一括追加</button>
+          <button id="bulk-clear-btn" class="ghost">入力クリア</button>
+        </div>
+        <p id="bulk-note" class="footer"></p>
+      </div>
+
+      <div class="card">
         <div class="inline" style="justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 10px;">
           <h2>プリセット一覧</h2>
           <span class="status" id="queue-count">キュー 0 件</span>

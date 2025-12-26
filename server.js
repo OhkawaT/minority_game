@@ -143,6 +143,20 @@ function removePreset(id) {
   state.queue = state.queue.filter((q) => q.id !== id);
 }
 
+function addPresets(items) {
+  if (!Array.isArray(items)) return [];
+  const added = [];
+  items.forEach((item) => {
+    if (!item) return;
+    const question = (item.question || '').trim();
+    if (!question) return;
+    const optionA = (item.optionA || '').trim();
+    const optionB = (item.optionB || '').trim();
+    added.push(addPreset(question, optionA, optionB));
+  });
+  return added;
+}
+
 function startRound(question, optionA, optionB) {
   state.round += 1;
   state.phase = 'voting';
@@ -363,6 +377,14 @@ wss.on('connection', (ws) => {
         if (info.role !== 'admin') return;
         addPreset(msg.question, msg.optionA, msg.optionB);
         broadcastState();
+        break;
+      }
+      case 'admin:queue:bulk': {
+        if (info.role !== 'admin') return;
+        if (Array.isArray(msg.items) && msg.items.length > 0) {
+          addPresets(msg.items);
+          broadcastState();
+        }
         break;
       }
       case 'admin:queue:remove': {

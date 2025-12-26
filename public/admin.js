@@ -30,6 +30,11 @@ const els = {
   queueList: document.getElementById('queue-list'),
   queueCount: document.getElementById('queue-count'),
   queueEmpty: document.getElementById('queue-empty'),
+  bulkInput: document.getElementById('bulk-input'),
+  bulkFile: document.getElementById('bulk-file'),
+  bulkAddBtn: document.getElementById('bulk-add-btn'),
+  bulkClearBtn: document.getElementById('bulk-clear-btn'),
+  bulkNote: document.getElementById('bulk-note'),
   summaryTotal: document.getElementById('summary-total'),
   summaryActive: document.getElementById('summary-active'),
   summaryA: document.getElementById('summary-a'),
@@ -203,6 +208,129 @@ function renderQueue(queue) {
   });
 }
 
+function parseBulkLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/^\s*\d+\s*[.)、．:：]?\s*/, '');
+
+  const tabParts = normalized.split('\t').map((part) => part.trim()).filter(Boolean);
+  if (tabParts.length >= 3) {
+    return {
+      question: tabParts[0],
+      optionA: tabParts[1],
+      optionB: tabParts.slice(2).join(' / '),
+    };
+  }
+
+  const commaParts = normalized.split(',').map((part) => part.trim()).filter(Boolean);
+  if (commaParts.length >= 3) {
+    return {
+      question: commaParts[0],
+      optionA: commaParts[1],
+      optionB: commaParts.slice(2).join(','),
+    };
+  }
+
+  const slashParts = normalized.split(/[/／]/).map((part) => part.trim()).filter(Boolean);
+  if (slashParts.length >= 3) {
+    return {
+      question: slashParts[0],
+      optionA: slashParts[1],
+      optionB: slashParts.slice(2).join(' / '),
+    };
+  }
+  if (slashParts.length < 2) return null;
+
+  const left = slashParts[0];
+  const optionB = slashParts[1];
+  if (!left || !optionB) return null;
+
+  const match = left.match(/^(.*?[？?！!。:：])\s*(.+)$/);
+  let question = '';
+  let optionA = '';
+  if (match) {
+    question = match[1].trim();
+    optionA = match[2].trim();
+  } else {
+    const lastSpace = left.lastIndexOf(' ');
+    if (lastSpace > 0) {
+      question = left.slice(0, lastSpace).trim();
+      optionA = left.slice(lastSpace + 1).trim();
+    } else {
+      return null;
+    }
+  }
+
+  if (!question || !optionA) return null;
+  return { question, optionA, optionB };
+}
+
+function parseBulkText(text) {
+  const items = [];
+  const errors = [];
+  const lines = (text || '').split(/\r?\n/);
+  lines.forEach((line, index) => {
+    if (!line.trim()) return;
+    const parsed = parseBulkLine(line);
+    if (!parsed) {
+      errors.push({ line: index + 1, text: line });
+      return;
+    }
+    items.push(parsed);
+  });
+  return { items, errors };
+}
+
+function updateBulkNote(result, fileName = '') {
+  if (!els.bulkNote) return;
+  if (!result) {
+    els.bulkNote.textContent = '';
+    return;
+  }
+  const parts = [];
+  if (fileName) parts.push(`読み込み: ${fileName}`);
+  parts.push(`追加候補: ${result.items.length}件`);
+  if (result.errors.length) {
+    const sample = result.errors.slice(0, 3).map((e) => `${e.line}行目`).join(', ');
+    const sampleText = sample ? ` (例: ${sample})` : '';
+    parts.push(`読み取り失敗: ${result.errors.length}件${sampleText}`);
+  }
+  els.bulkNote.textContent = parts.join(' / ');
+}
+
+async function handleBulkFileChange() {
+  if (!els.bulkFile || !els.bulkInput) return;
+  const file = els.bulkFile.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    els.bulkInput.value = text;
+    const result = parseBulkText(text);
+    updateBulkNote(result, file.name);
+    showToast(`${file.name} を読み込みました`);
+  } catch {
+    showToast('ファイルの読み込みに失敗しました', 'warn');
+  }
+}
+
+function handleBulkAdd() {
+  if (!els.bulkInput) return;
+  const result = parseBulkText(els.bulkInput.value);
+  updateBulkNote(result);
+  if (!result.items.length) {
+    showToast('追加できるお題がありません', 'warn');
+    return;
+  }
+  sendAdmin('admin:queue:bulk', { items: result.items });
+  showToast(`キューに${result.items.length}件追加しました`);
+}
+
+function clearBulkInput() {
+  if (els.bulkInput) els.bulkInput.value = '';
+  if (els.bulkFile) els.bulkFile.value = '';
+  updateBulkNote(null);
+}
+
 function renderPlayers(list, state) {
   els.players.innerHTML = '';
   const fragments = document.createDocumentFragment();
@@ -285,6 +413,21 @@ els.queueAddBtn.addEventListener('click', () => {
   els.optionB.value = '';
   showToast('キューに追加しました');
 });
+
+if (els.bulkAddBtn) {
+  els.bulkAddBtn.addEventListener('click', handleBulkAdd);
+}
+
+if (els.bulkClearBtn) {
+  els.bulkClearBtn.addEventListener('click', () => {
+    clearBulkInput();
+    showToast('入力をクリアしました');
+  });
+}
+
+if (els.bulkFile) {
+  els.bulkFile.addEventListener('change', handleBulkFileChange);
+}
 
 els.queueStartBtn.addEventListener('click', () => {
   sendAdmin('admin:next');
